@@ -480,7 +480,7 @@ _cairo_recording_surface_region_array_destroy (cairo_recording_surface_t       *
     cairo_recording_region_element_t *region_elements;
     int i, num_elements;
 
-    num_elements = surface->commands.num_elements;
+    num_elements = MIN(surface->commands.num_elements, _cairo_array_num_elements(&region_array->regions));
     elements = _cairo_array_index (&surface->commands, 0);
     region_elements = _cairo_array_index (&region_array->regions, 0);
     for (i = 0; i < num_elements; i++) {
@@ -1154,6 +1154,10 @@ _cairo_recording_surface_show_text_glyphs (void				*abstract_surface,
 
     command->cluster_flags = cluster_flags;
 
+    status = scaled_font->status;
+    if (unlikely (status))
+	goto CLEANUP_ARRAYS;
+
     command->scaled_font = cairo_scaled_font_reference (scaled_font);
 
     status = _cairo_recording_surface_commit (surface, &command->header);
@@ -1193,7 +1197,7 @@ _cairo_recording_surface_tag (void			 *abstract_surface,
 
     surface->has_tags = TRUE;
 
-    command = calloc (1, sizeof (cairo_command_tag_t));
+    command = _cairo_calloc (1, sizeof (cairo_command_tag_t));
     if (unlikely (command == NULL)) {
 	return _cairo_error (CAIRO_STATUS_NO_MEMORY);
     }
@@ -1516,7 +1520,7 @@ _cairo_recording_surface_copy__tag (cairo_recording_surface_t *surface,
     cairo_command_tag_t *command;
     cairo_status_t status;
 
-    command = calloc (1, sizeof (*command));
+    command = _cairo_calloc (1, sizeof (*command));
     if (unlikely (command == NULL)) {
 	status = _cairo_error (CAIRO_STATUS_NO_MEMORY);
 	goto err;

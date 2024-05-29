@@ -1,12 +1,14 @@
 project('cairo', 'c', 'cpp',
-  meson_version: '>= 0.59.0',
+  meson_version: '>= 1.3.0',
   version: run_command(find_program('version.py'), check: true).stdout().strip(),
-  default_options: ['warning_level=2'],
+  default_options: ['c_std=gnu11,c11',
+                    'warning_level=2'],
 )
 
-freetype_required_version = '>= 9.7.3'
-freetype_colrv1_required_version = '>= 25.0.19'
-fontconfig_required_version = '>= 2.2.95'
+freetype_required_version = '>= 23.0.17' # Release version 2.10
+freetype_colrv1_required_version = '>= 25.0.19' # Release version 2.13
+fontconfig_required_version = '>= 2.13.0'
+libpng_required_version = '>= 1.4.0'
 xrender_required_version = '>= 0.6'
 xcb_required_version = '>= 1.6'
 xcb_render_required_version = '>= 1.6'
@@ -233,6 +235,7 @@ endif
 
 png_dep = dependency('libpng',
   required: get_option('png'),
+  version: libpng_required_version,
   fallback: ['libpng', 'libpng_dep']
 )
 if png_dep.found()
@@ -314,26 +317,14 @@ if freetype_dep.found()
     'compile-deps': [fontconfig_dep.partial_dependency(compile_args: true, includes: true)],
   }]
 
-  ft_check_funcs = [
-    'FT_Get_X11_Font_Format',
-    'FT_GlyphSlot_Embolden',
-    'FT_GlyphSlot_Oblique',
-    'FT_Load_Sfnt_Table',
-    'FT_Library_SetLcdFilter',
-    'FT_Get_Var_Design_Coordinates',
-    'FT_Done_MM_Var',
-    'FT_Palette_Select',
-  ]
-
   if freetype_dep.type_name() == 'internal'
-    foreach func : ft_check_funcs
-      conf.set('HAVE_@0@'.format(func.to_upper()), 1)
-    endforeach
+    if freetype_dep.version().version_compare(freetype_colrv1_required_version)
+      conf.set('HAVE_FT_SVG_DOCUMENT', 1)
+      conf.set('HAVE_FT_LOAD_NO_SVG', 1)
+      conf.set('HAVE_FT_COLR_V1', 1)
+    endif
     internal_deps += [freetype_dep]
   else
-    if not cc.links(files('meson-cc-tests/ft_has_color.c'), dependencies: freetype_dep, name: 'FT has color')
-      conf.set('FT_HAS_COLOR', '(0)')
-    endif
     if png_dep.found() and \
         cc.has_type('FT_SVG_Document', dependencies: freetype_dep, prefix: '#include <freetype/otsvg.h>')
       conf.set('HAVE_FT_SVG_DOCUMENT', 1)
@@ -348,7 +339,6 @@ if freetype_dep.found()
        cc.has_function('FT_Get_Color_Glyph_Paint', dependencies: freetype_dep)
       conf.set('HAVE_FT_COLR_V1', 1)
     endif
-    check_funcs += ft_check_funcs
     deps += [freetype_dep]
   endif
 endif
@@ -643,6 +633,9 @@ pixman_dep = dependency('pixman-1',
 if pixman_dep.found()
   feature_conf.set('CAIRO_HAS_IMAGE_SURFACE', 1)
   conf.set('HAS_PIXMAN_GLYPHS', 1)
+  if pixman_dep.version().version_compare('>= 0.42.3')
+    conf.set('HAS_PIXMAN_r8g8b8_sRGB', 1)
+  endif
   if pixman_dep.type_name() == 'internal'
     internal_deps += [pixman_dep]
   else
@@ -766,7 +759,7 @@ if not ['x86', 'x86_64'].contains(host_machine.cpu_family())
   conf.set('ATOMIC_OP_NEEDS_MEMORY_BARRIER', 1)
 endif
 
-have_ld_preload = ['linux', 'freebsd', 'darwin', 'dragonfly'].contains(host_machine.system())
+have_ld_preload = ['linux', 'freebsd', 'darwin', 'dragonfly', 'sunos'].contains(host_machine.system())
 
 if have_ld_preload and zlib_dep.found() and conf.get('CAIRO_HAS_REAL_PTHREAD', 0) == 1 and conf.get('CAIRO_HAS_DLSYM', 0) == 1
   conf.set('CAIRO_HAS_TRACE', 1)
