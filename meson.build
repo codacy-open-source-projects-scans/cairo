@@ -2,6 +2,7 @@ project('cairo', 'c',
   meson_version: '>= 1.3.0',
   version: run_command(find_program('version.py'), check: true).stdout().strip(),
   default_options: ['c_std=gnu11,c11',
+                    'cpp_std=gnu++11,c++11',
                     'warning_level=2'],
 )
 
@@ -75,7 +76,7 @@ if cc.get_id() != 'msvc'
   endif
 
   supported_cflags = cc.get_supported_arguments(cflags)
-  add_project_arguments(supported_cflags, language: 'c')
+  add_project_arguments(supported_cflags, language: ['c', 'cpp'])
 
   # We only wish to enable attribute(warn_unused_result) if we can prevent
   # gcc from generating thousands of warnings about the misapplication of the
@@ -94,10 +95,13 @@ if cc.get_id() == 'msvc'
   add_project_arguments('/wd4244', '/wd4146',
                         # Don't warn about double -> float truncation
                         '/wd4305',
-                        language : 'c')
+                        # Don't warn about _cairo_status -> _cairo_int_status conversion
+                        '/wd5286',
+                        language : ['c', 'cpp'])
+  add_project_arguments('-D_CRT_SECURE_NO_WARNINGS', language : ['c', 'cpp'])
 endif
 
-add_project_arguments('-D_GNU_SOURCE', language: 'c')
+add_project_arguments('-D_GNU_SOURCE', language: ['c', 'cpp'])
 
 pkgmod = import('pkgconfig')
 python3 = import('python').find_installation()
@@ -484,7 +488,7 @@ if host_machine.system() == 'darwin' and not get_option('quartz').disabled()
 endif
 
 if host_machine.system() == 'windows'
-  add_languages('cpp')
+  add_languages('cpp', native: false)
 
   add_project_arguments('-DWIN32_LEAN_AND_MEAN', '-DNOMINMAX', language: ['c', 'cpp'])
 
@@ -535,7 +539,7 @@ if host_machine.system() == 'windows'
 
     add_project_arguments('-DWINVER=_WIN32_WINNT_WIN10', '-D_WIN32_WINNT=_WIN32_WINNT_WIN10', '-DNTDDI_VERSION=NTDDI_WIN10_RS3', language: ['c', 'cpp'])
   else
-    add_project_arguments('-DWINVER=_WIN32_WINNT_WIN2K', '-D_WIN32_WINNT=_WIN32_WINNT_WIN2K', language: ['c', 'cpp'])
+    add_project_arguments('-DWINVER=_WIN32_WINNT_VISTA', '-D_WIN32_WINNT=_WIN32_WINNT_VISTA', language: ['c', 'cpp'])
   endif
 endif
 
@@ -732,7 +736,7 @@ endforeach
 extra_link_args += pthread_link_args
 
 # Atomics are an optional feature in C11. Also need to check that C11 atomics are lock free.
-# Windows can't use C11 atomics as some files are compiled with C++.
+# On Windows we use the Interlocked family of functions
 if host_machine.system() != 'windows'
   if cc.links(files('meson-cc-tests/atomic-ops-c11.c'), name: 'Atomic ops: c11')
     conf.set('HAVE_C11_ATOMIC_PRIMITIVES', 1)
